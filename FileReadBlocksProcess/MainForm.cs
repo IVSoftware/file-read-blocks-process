@@ -5,8 +5,19 @@ namespace ImportValidateAnalyzeReporter
 {
     public partial class MainForm : Form, IProgress<(TimeSpan, int, int)>
     {
+        string VeryLargeFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "one-million-guids.txt");
         public MainForm()
         {
+            // Make a file with 1 million lines.
+            if (!File.Exists(VeryLargeFile)) File.WriteAllText(
+                VeryLargeFile,
+                string.Join(
+                    Environment.NewLine,
+                    Enumerable.Range(0, 1000000)
+                    .Select(_ => string.Join(
+                        " ", 
+                        Enumerable.Range(0, 10).Select(_=>$"{Guid.NewGuid()}")))));
+
             InitializeComponent();
             btnAction.Click += btnAction_Click;
         }
@@ -17,7 +28,7 @@ namespace ImportValidateAnalyzeReporter
             _progress.ProgressChanged += (sender, e) =>
             {
                 Debug.Assert(!InvokeRequired);
-                labelElapsed.Text = $@"{e.Item1:hh\:mm\:ss}";
+                labelElapsed.Text = $@"{e.Item1:hh\:mm\:ss\.f}";
                 Text = $"Main Form {e.Item2} of {e.Item3}";
             };
         }
@@ -46,34 +57,28 @@ namespace ImportValidateAnalyzeReporter
         private async Task ImportValidateAnalyze(IProgress<(TimeSpan, int, int)> progress, CancellationToken token)
         {
             var stopwatch = Stopwatch.StartNew();
-            var lastUpdateSecond = 0;
-            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "loremipsum.txt");
+            var lastUpdate = 0;
 
             // "The ImportValidateAnalyze() method may import one million lines from a text file..."
             var count = 0;
             var max = 1000000;
             progress.Report((TimeSpan.Zero, count, max));
-            while (count < max)
+            using (StreamReader reader = new StreamReader(VeryLargeFile))
             {
-                using (StreamReader reader = new StreamReader(path))
+                while (count < max)
                 {
-                    while (count < max)
+                    if (await reader.ReadLineAsync(token) is string line)
                     {
-                        if (await reader.ReadLineAsync(token) is string line)
+                        count++;
+                        var currentUpdate = (int)(stopwatch.Elapsed.TotalSeconds * 10);
+                        if (lastUpdate < currentUpdate)
                         {
-                            count++;
-                            var currentUpdateSecond = (int)stopwatch.Elapsed.TotalSeconds;
-                            if (lastUpdateSecond < currentUpdateSecond)
-                            {
-                                progress.Report((stopwatch.Elapsed, count, max));
-                                lastUpdateSecond = currentUpdateSecond;
-                            }
+                            progress.Report((stopwatch.Elapsed, count, max));
+                            lastUpdate = currentUpdate;
                         }
-                        else break;
                     }
+                    else break;
                 }
-                // Throttle this loop so that it doesn't consume all the CPU.
-                await Task.Delay(100);
             }
             progress.Report((stopwatch.Elapsed, max, max));
         }
