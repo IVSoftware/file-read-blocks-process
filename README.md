@@ -1,26 +1,28 @@
 **New! Improved!**
 
-Agreed, my original answer didn't quite nail it. Today I woke up fresh with a **_new plausible and provable theory of failure_** about what could give the appearance of a thread being blocked during the execution of a process that the OP states _"may import one million lines from a text file"_. 
+Agreed, my original answer didn't quite nail it. Today I woke up fresh with a **_new plausible and provable theory of failure_** about what could give the appearance of a thread being blocked (even if it's not) during the execution of a process that the OP states **_"may import one million lines from a text file"_**.
 
-My new theory of failure is based on the idea that when when long tasks are offloaded to another thread, if they're intense enough, they can still hog all the CPU power. This doesn't block the UI thread directly, but it does choke off the resources the UI needs to update smoothly or at all. You mention the `ImportValidateAnalyze(...)` method specifically. If we read those one million lines with a `ReadLineAsync()` as shown in the snippet, one might think that would allow the loop to sufficiently breathe. But I have two MREs that show this isn't necessarily so.
+This new theory is based on the observation that while tasks offloaded to another thread should theoretically not affect the UI thread, if they're intense enough, they can monopolize CPU resources. This heavy demand doesn't block the UI thread directly but limits the resources available for the UI to update smoothly or at all. You highlighted the `ImportValidateAnalyze(...)` method specifically so let's focus on that. Suppose we improve the loop by reading those one million lines using `ReadLineAsync()` as shown in the snippet below. One might think that the loop would yield to the UI for an update in this case. However, I have two MREs that illustrate how things we 'know' might not always be 'so'!
 
 - The first MRE uses a properly provisioned `Progress` class.
-- The second MRE uses an externasl timer update like the original OP.
-- Both examples show how one can make it work. You're right. It _"doesn't seem like too much to ask"!_
+- The second MRE uses an external timer update like the original OP.
+- Both show how one can make it work. You're right. It _"doesn't seem like too much to ask"!_
 - Both examples can be shown to "freeze the UI" if the loop that reads the one million lines is run too tightly.
 - We can even put some logging or a `DebugWrite` to see that the update requests are in fact still being received (i.e. thread isn't blocked per se).
 
-The latest comment clarified:
+___
 
-> The "real problem" is that an application that runs a 10 minute method appears dead! I just want to post smething in the ui to let the user know it is still alive, and to wait for completion. 
+Your latest comment clarified:
 
-So, here are two minimal examples showing different means of achieving that, that also demonstrate deterministic failures when the background loop runs too tightly.
+> The "real problem" is that an application that runs a 10 minute method appears dead! I just want to post smething in the ui to let the user know it is still alive, and to wait for completion.
+
+We don't have access to your actual code, but it seems possible that this phenomenon could be contributing to what you're describing. To explore this notion further, here are two minimal examples that demonstrate successful options for achieving updates. In both cases, toggling the checkbox reveals a deterministic failure by allowing the background loop to run tightly without throttling. Once checked, the UI becomes unresponsive to the point that even attempts to uncheck the checkbox no longer function.
 
 ___
 
 **Minimal Reproducible Example #1 (using `Progress` class)**
 
-As stated in the comment by Panagiotis Kanavos, on one hand this seems like a straightforward application for the `Progress` class. So let's "do everything right" in that respect and set up a minimal reproducible example that does a `ReadLineAsync()` one million times and attempts to update progress. The snippet below shows one way to set this up properly, but I've also provided an option to deliberately "break" the update mechanism.
+As stated in the comment by Panagiotis Kanavos, on one hand this seems like a straightforward application for the `Progress` class. So let's "do everything right" in that respect and set up a minimal reproducible example that does a `ReadLineAsync()` one million times and attempts to update progress. Below, the snippet not only shows how to set this up properly but also includes an option to deliberately 'break' the update mechanism.
 
 
 ```
@@ -56,16 +58,14 @@ public partial class MainForm : Form, IProgress<(TimeSpan, int, int)>
     Progress<(TimeSpan, int, int)>? _progress;
     public void Report((TimeSpan, int, int) value) =>
         ((IProgress <(TimeSpan, int, int)>?)_progress)?.Report(value);
-    CancellationTokenSource? _cts = null;
     private async void btnAction_Click(object? sender, EventArgs e)
     {
         try
         {
+            var cts = new CancellationTokenSource();
             btnAction.Enabled = false;
-            if (_cts is not null) _cts.Cancel();
-            _cts = new CancellationTokenSource();
             labelElapsed.Visible = true;
-            await ImportValidateAnalyze(this, _cts.Token);
+            await ImportValidateAnalyze(this, cts.Token);
         }
         catch(OperationCanceledException)
         { }
@@ -114,11 +114,13 @@ public partial class MainForm : Form, IProgress<(TimeSpan, int, int)>
     }
 }
 ```
-
+[![test-bench ui](https://i.sstatic.net/bVTygkUr.png)](https://i.sstatic.net/bVTygkUr.png)
 ___
 
 
 **Minimal Reproducible Example #2 (using external update timer like OP)**
+
+This example uses an external update timer, similar to the original poster's approach, to demonstrate managing UI updates during intensive background processing.
 
 ```
 public partial class MainForm : Form, IProgress<(int, int)>
