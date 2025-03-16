@@ -35,16 +35,14 @@ namespace ImportValidateAnalyzeReporter
         Progress<(TimeSpan, int, int)>? _progress;
         public void Report((TimeSpan, int, int) value) =>
             ((IProgress <(TimeSpan, int, int)>?)_progress)?.Report(value);
-        CancellationTokenSource? _cts = null;
         private async void btnAction_Click(object? sender, EventArgs e)
         {
             try
             {
+                var cts = new CancellationTokenSource();
                 btnAction.Enabled = false;
-                if (_cts is not null) _cts.Cancel();
-                _cts = new CancellationTokenSource();
                 labelElapsed.Visible = true;
-                await ImportValidateAnalyze(this, _cts.Token);
+                await ImportValidateAnalyze(this, cts.Token);
             }
             catch(OperationCanceledException)
             { }
