@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace ImportValidateAnalyzeReporter
 {
-    public partial class MainForm : Form, IProgress<(TimeSpan, int, int)>
+    public partial class MainForm : Form, IProgress<(int, int)>
     {
         string VeryLargeFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "one-million-guids.txt");
         public MainForm()
@@ -18,43 +18,53 @@ namespace ImportValidateAnalyzeReporter
                         " ", 
                         Enumerable.Range(0, 10).Select(_=>$"{Guid.NewGuid()}")))));
 
+            _progress = new Progress<(int, int)>();
+            _progress.ProgressChanged += (sender, e) =>
+            {
+                progressCurrent = e.Item1;
+                progressMax = e.Item2;
+            };
             InitializeComponent();
             btnAction.Click += btnAction_Click;
         }
-        protected override void OnHandleCreated(EventArgs e)
-        {
-            base.OnHandleCreated(e);
-            _progress = new Progress<(TimeSpan, int, int)>();
-            _progress.ProgressChanged += (sender, e) =>
-            {
-                Debug.Assert(!InvokeRequired);
-                labelElapsed.Text = $@"{e.Item1:hh\:mm\:ss\.f}";
-                Text = $"Main Form {e.Item2} of {e.Item3}";
-            };
-        }
-        Progress<(TimeSpan, int, int)>? _progress;
-        public void Report((TimeSpan, int, int) value) =>
-            ((IProgress <(TimeSpan, int, int)>?)_progress)?.Report(value);
-        CancellationTokenSource? _cts = null;
+        int progressCurrent = 0, progressMax = 0;
+        Progress<(int, int)>? _progress;
+        public void Report((int, int) value) =>
+            ((IProgress <(int, int)>?)_progress)?.Report(value);
         private async void btnAction_Click(object? sender, EventArgs e)
         {
+            Task? task = null;
+            var cts = new CancellationTokenSource();
             try
             {
                 btnAction.Enabled = false;
-                if (_cts is not null) _cts.Cancel();
-                _cts = new CancellationTokenSource();
+                var stopwatch = Stopwatch.StartNew();
                 labelElapsed.Visible = true;
-                await ImportValidateAnalyze(this, _cts.Token);
+                task = Task.Run(() =>
+                {
+                    while (!cts.IsCancellationRequested)
+                    {
+                        BeginInvoke(() =>
+                        {
+                            labelElapsed.Text = $@"{stopwatch.Elapsed:hh\:mm\:ss\.f}";
+                            Text = $"Main Form {progressCurrent} of {progressMax}";
+                        });
+                        Thread.Sleep(100);
+                    }
+                }, cts.Token);
+                await ImportValidateAnalyze(this, cts.Token);
             }
-            catch(OperationCanceledException)
+            catch (OperationCanceledException)
             { }
             finally
             {
                 btnAction.Enabled = true;
                 labelElapsed.Visible = false;
+                cts.Cancel();
+                if (task is not null) await task;
             }
         }
-        private async Task ImportValidateAnalyze(IProgress<(TimeSpan, int, int)> progress, CancellationToken token)
+        private async Task ImportValidateAnalyze(IProgress<(int, int)> progress, CancellationToken token)
         {
             var stopwatch = Stopwatch.StartNew();
             var lastUpdate = 0;
@@ -62,7 +72,7 @@ namespace ImportValidateAnalyzeReporter
             // "The ImportValidateAnalyze() method may import one million lines from a text file..."
             var count = 0;
             var max = 1000000;
-            progress.Report((TimeSpan.Zero, count, max));
+            progress.Report((count, max));
             using (StreamReader reader = new StreamReader(VeryLargeFile))
             {
                 while (count < max)
@@ -70,18 +80,19 @@ namespace ImportValidateAnalyzeReporter
                     if (await reader.ReadLineAsync(token) is string line)
                     {
                         count++;
+                        progress.Report((count, max));
                         var currentUpdate = (int)(stopwatch.Elapsed.TotalSeconds * 10);
                         if (checkBoxBreakMe.Checked)
                         {
                             // Without throttling.
-                            progress.Report((stopwatch.Elapsed, count, max));
                         }
                         else
                         {
                             if (lastUpdate < currentUpdate)
                             {
-                                // Throttle updates to 0.1 second intervals.
-                                progress.Report((stopwatch.Elapsed, count, max));
+                                // Periodically allow the UI message look catch up
+                                await Task.Delay(TimeSpan.FromSeconds(0.1)); 
+                                currentUpdate = (int)(stopwatch.Elapsed.TotalSeconds * 10);
                                 lastUpdate = currentUpdate;
                             }
                         }
@@ -89,7 +100,7 @@ namespace ImportValidateAnalyzeReporter
                     else break;
                 }
             }
-            progress.Report((stopwatch.Elapsed, max, max));
+            progress.Report((max, max));
         }
     }
 }
