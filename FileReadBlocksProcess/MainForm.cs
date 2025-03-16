@@ -17,20 +17,20 @@ namespace ImportValidateAnalyzeReporter
                     .Select(_ => string.Join(
                         " ", 
                         Enumerable.Range(0, 10).Select(_=>$"{Guid.NewGuid()}")))));
-
-            InitializeComponent();
-            btnAction.Click += btnAction_Click;
-        }
-        protected override void OnHandleCreated(EventArgs e)
-        {
-            base.OnHandleCreated(e);
             _progress = new Progress<(TimeSpan, int, int)>();
+            Debug.Assert(SynchronizationContext.Current != null);
             _progress.ProgressChanged += (sender, e) =>
             {
                 Debug.Assert(!InvokeRequired);
                 labelElapsed.Text = $@"{e.Item1:hh\:mm\:ss\.f}";
                 Text = $"Main Form {e.Item2} of {e.Item3}";
+
+                // Uncomment to show that messages 'are' received but do not update the label.
+                // Debug.WriteLine($"{e.Item2} of {e.Item3}");
             };
+
+            InitializeComponent();
+            btnAction.Click += btnAction_Click;
         }
         Progress<(TimeSpan, int, int)>? _progress;
         public void Report((TimeSpan, int, int) value) =>
