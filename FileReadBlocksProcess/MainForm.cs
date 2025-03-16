@@ -71,10 +71,19 @@ namespace ImportValidateAnalyzeReporter
                     {
                         count++;
                         var currentUpdate = (int)(stopwatch.Elapsed.TotalSeconds * 10);
-                        if (lastUpdate < currentUpdate)
+                        if (checkBoxBreakMe.Checked)
                         {
+                            // Without throttling.
                             progress.Report((stopwatch.Elapsed, count, max));
-                            lastUpdate = currentUpdate;
+                        }
+                        else
+                        {
+                            if (lastUpdate < currentUpdate)
+                            {
+                                // Throttle updates to 0.1 second intervals.
+                                progress.Report((stopwatch.Elapsed, count, max));
+                                lastUpdate = currentUpdate;
+                            }
                         }
                     }
                     else break;

@@ -30,11 +30,12 @@
         {
             btnAction = new Button();
             labelElapsed = new Label();
+            checkBoxBreakMe = new CheckBox();
             SuspendLayout();
             // 
             // btnAction
             // 
-            btnAction.Location = new Point(145, 126);
+            btnAction.Location = new Point(145, 98);
             btnAction.Name = "btnAction";
             btnAction.Size = new Size(234, 63);
             btnAction.TabIndex = 0;
@@ -43,7 +44,7 @@
             // 
             // labelElapsed
             // 
-            labelElapsed.Location = new Point(145, 55);
+            labelElapsed.Location = new Point(145, 27);
             labelElapsed.Name = "labelElapsed";
             labelElapsed.Size = new Size(234, 56);
             labelElapsed.TabIndex = 1;
@@ -51,11 +52,22 @@
             labelElapsed.TextAlign = ContentAlignment.MiddleCenter;
             labelElapsed.Visible = false;
             // 
+            // checkBoxBreakMe
+            // 
+            checkBoxBreakMe.ForeColor = Color.Maroon;
+            checkBoxBreakMe.Location = new Point(182, 179);
+            checkBoxBreakMe.Name = "checkBoxBreakMe";
+            checkBoxBreakMe.Size = new Size(153, 63);
+            checkBoxBreakMe.TabIndex = 2;
+            checkBoxBreakMe.Text = "Break Me";
+            checkBoxBreakMe.UseVisualStyleBackColor = false;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(13F, 32F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(528, 244);
+            Controls.Add(checkBoxBreakMe);
             Controls.Add(labelElapsed);
             Controls.Add(btnAction);
             Font = new Font("Segoe UI", 12F);
@@ -70,5 +82,6 @@
 
         private Button btnAction;
         private Label labelElapsed;
+        private CheckBox checkBoxBreakMe;
     }
 }
